@@ -1,2 +1,3 @@
 # NTFE-scripts
-R markdown documents
+
+Inneholder R mardown dokumenter for datasimuleringer til 
