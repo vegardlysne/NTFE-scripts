@@ -1,0 +1,128 @@
+---
+title: "Effekten av feilkilder i kostdata, NTFE nr 2 2018"
+author: "Vegard Lysne"
+date: "18.mai 2018"
+output: 
+  html_document:
+    df_print: paged
+---
+
+Laster inn nødvendige pakker og simulerer datasett med kostholdsvariabler. BMI og Systolisk blodtrykk simuleres slik at de henger positivt sammen med karbohydratinntak, mens LDL-kolesterol simuleres til å være inverst assosiert med karbohydrat. 
+```{r datasimulering, message=F, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(magrittr)
+library(simstudy)
+library(broom)
+library(gridExtra)
+set.seed(123456789)
+data <- genData(500,
+        defData(varname = "Sex", dist = "categorical", formula = "0.58;0.42") %>% 
+        defData("Age", dist = "uniform", formula = "30;60") %>% 
+        defData("logKARBOHYDRAT", dist = "normal", formula = 5.3, variance = 0.12) %>% 
+        defData("logPROT", dist = "normal", formula = 4.4, variance = 0.07) %>% 
+        defData("logFETT", dist = "normal", formula = 4.3, variance = 0.07) %>% 
+        defData("Karbohydrat", dist = "nonrandom", formula = "exp(logKARBOHYDRAT)") %>% 
+        defData("Protein", dist = "nonrandom", formula = "exp(logPROT)") %>% 
+        defData("Fett", dist = "nonrandom", formula = "exp(logFETT)") %>% 
+        defData("Energi_kcal", dist = "nonrandom", formula = "4*Karbohydrat + 4*Protein + 9*Fett") %>% 
+        defData("BMI", dist = "normal", formula = "21+0.002*Energi_kcal+0.002*Karbohydrat", variance = 5) %>% 
+        defData("Systolic BP", dist = "normal", formula = "113+0.04*Karbohydrat", variance = 10) %>% 
+        defData("logLDL", dist = "normal", formula = "2.2 - 0.001*Karbohydrat", variance = 0.02) %>%
+        defData("LDL", dist = "nonrandom", formula = "exp(logLDL)")) %>% 
+  mutate(`Tilfeldig feil` = Karbohydrat + rnorm(500, 0, 75),
+         `Additiv feil` = Karbohydrat + 50,
+         `Underrapportering` = Karbohydrat * 0.80,
+         `Overrapportering` = Karbohydrat * 1.20,
+         Personspesifikk = case_when(BMI > 27 ~ Karbohydrat*0.5,
+                                     BMI < 23 ~ Karbohydrat*1.5,
+                                     TRUE ~ Karbohydrat)) %>% 
+  rename(`Systolisk Blodtrykk` = Systolic.BP)
+```
+
+```{r Visualisering av feil, fig.height=10, fig.width=10, message=F}
+plottdata <- data %>% 
+  select(`Faktisk inntak` = Karbohydrat, `Tilfeldig feil`, `Additiv feil`, 
+         `Underrapportering`, `Overrapportering`, Personspesifikk, BMI, `Systolisk Blodtrykk`, LDL) %>% 
+  gather(Eksponering, Karbohydrat, 1:6) %>% 
+  mutate(Eksponering = fct_inorder(Eksponering))
+
+bakgrunnsdata <- plottdata %>% filter(Eksponering == "Faktisk inntak") %>% select(-Eksponering)
+
+BMIplott <- ggplot(data = plottdata, aes(Karbohydrat, BMI)) + 
+  theme_bw() + 
+  geom_jitter(data = bakgrunnsdata, aes(Karbohydrat, BMI), color = "grey80", shape = 19) +
+  geom_jitter(color = "red", alpha = 0.6, shape = 19) + 
+  geom_smooth(data = bakgrunnsdata, aes(Karbohydrat, BMI), method = "lm", se = F, color = "grey60") + 
+  geom_smooth(method = "lm", color = "black", se = F) + 
+  facet_grid(Eksponering~.) + 
+  labs(y = "") + 
+  ggtitle("BMI") + 
+  theme(strip.background = element_blank(),
+  strip.text.y = element_blank()) 
+
+BTplott <- ggplot(data = plottdata, aes(Karbohydrat, `Systolisk Blodtrykk`)) + 
+  theme_bw() + 
+  geom_jitter(data = bakgrunnsdata, aes(Karbohydrat, `Systolisk Blodtrykk`), color = "grey80", shape = 19) +
+  geom_jitter(color = "red", alpha = 0.6, shape = 19) + 
+  geom_smooth(data = bakgrunnsdata, aes(Karbohydrat, `Systolisk Blodtrykk`), method = "lm", se = F, color = "grey60") + 
+  geom_smooth(method = "lm", color = "black", se = F) + 
+  facet_grid(Eksponering~.) + 
+  labs(y = "") + 
+  ggtitle("Systolisk blodtrykk") + 
+  theme(strip.background = element_blank(),
+  strip.text.y = element_blank())
+
+LDLplott <- ggplot(data = plottdata, aes(Karbohydrat, LDL)) + 
+  theme_bw() + 
+  geom_jitter(data = bakgrunnsdata, aes(Karbohydrat, LDL), color = "grey80", shape = 19) +
+  geom_jitter(color = "red", alpha = 0.6, shape = 19) + 
+  geom_smooth(data = bakgrunnsdata, aes(Karbohydrat, LDL), method = "lm", se = F, color = "grey60") + 
+  geom_smooth(method = "lm", color = "black", se = F) + 
+  facet_grid(Eksponering~.) + 
+  labs(y = "") + 
+  ggtitle("LDL")
+
+grid.arrange(BMIplott, BTplott, LDLplott, ncol = 3)
+```
+
+Tabell over effekter på estimert inntaksfordeling
+```{r Inntaksfordeling}
+data %>% 
+  select(`Faktisk inntak` = Karbohydrat, `Tilfeldig feil`, `Additiv feil`, 
+         `Underrapportering`, `Overrapportering`, Personspesifikk) %>% 
+  gather(Gruppe, Inntak, 1:6) %>% 
+  mutate(Gruppe = fct_inorder(Gruppe)) %>% 
+  group_by(Gruppe) %>% 
+  summarise(Gjennomsnitt = round(mean(Inntak), 1),
+            SD = round(sd(Inntak),1),
+            `25-75 percentil` = paste0(round(quantile(Inntak, 0.25),1), " - ", round(quantile(Inntak, 0.75),1))) %>% 
+  rename(" " = Gruppe) %>% 
+  mutate(`Problem?` = c(NA, rep("Ja", 5)))
+```
+
+Tabell over effekter på kosthold-helse assosiasjoner
+```{r Kosthold-helse assosiasjon}
+getestimate <- function(model) tidy(model) %>% filter(term != "(Intercept)") %>% pull(estimate)
+
+data %>% 
+  select(`Faktisk inntak` = Karbohydrat, `Tilfeldig feil`, `Additiv feil`, 
+         `Overrapportering`, `Underrapportering`, Personspesifikk, BMI, `Systolisk Blodtrykk`, LDL) %>% 
+  gather(Gruppe, Inntak, 1:6) %>% 
+  mutate(Gruppe = fct_inorder(Gruppe)) %>% 
+  select(Gruppe, Inntak, everything()) %>% 
+  group_by(Gruppe) %>% 
+  nest() %>% 
+  mutate(BMImodel = map(data, function(df) lm(BMI~Inntak, data = df)),
+         BTmodel = map(data, function(df) lm(`Systolisk Blodtrykk`~Inntak, data = df)),
+         LDLmodel = map(data, function(df) lm(LDL~Inntak, data = df))) %>%
+  mutate(`Effekt BMI` = (map_dbl(BMImodel, getestimate)*100) %>% round(1),
+         `Effekt BT` = (map_dbl(BTmodel, getestimate)*100) %>% round(1),
+         `Effekt LDL` = (map_dbl(LDLmodel, getestimate)*100) %>% round(2),
+         `Styrke BMI` = paste0(round(map(BMImodel, glance) %>% map_dbl("r.squared")*100,1), " %"),
+         `Styrke BT` = paste0(round(map(BTmodel, glance) %>% map_dbl("r.squared")*100,1), " %"),
+         `Styrke LDL` = paste0(round(map(LDLmodel, glance) %>% map_dbl("r.squared")*100,1), " %")) %>% 
+  select(Gruppe, 6:11) %>% 
+  rename(" " = Gruppe) %>% 
+  mutate(`Problem?` = c(NA, "Ja", "Nei", "Nei", "Nei", "Ja"))
+```
+
