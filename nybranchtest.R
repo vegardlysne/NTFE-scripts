@@ -1,3 +1,3 @@
 # Legge til noen endringer her da
 
-# Nye kommentarer her"
+# Nye stilige kommentarer her"
