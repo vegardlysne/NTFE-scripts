@@ -9,7 +9,6 @@ output: html_document
 library(ggplot2)
 library(data.table)
 library(extrafont)
-library(rayshader)
 
 min_ggsave <- function(filnavn, p,  h = 16.5, b = 22){
   file <- paste0("./plot/", filnavn, ".png")
