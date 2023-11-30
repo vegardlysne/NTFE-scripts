@@ -9,6 +9,7 @@ output: html_document
 library(ggplot2)
 library(data.table)
 library(extrafont)
+library(patchwork)
 
 min_ggsave <- function(filnavn, p,  h = 16.5, b = 22){
   file <- paste0("./plot/", filnavn, ".png")
@@ -43,24 +44,24 @@ data[, `:=` (low = mean - 2*SD, high = mean + 2*SD)]
 ```{r}
 d1 <- data[, head(.SD, 10), by = c("Kjønn", "Yrke")]
 
+
 demo <- theme_bw()
 theme_set(demo)
 theme_update(axis.ticks = element_blank(),
              axis.text = element_blank(),
              axis.title = element_blank(),
              panel.grid = element_blank(),
-             legend.position = "none", scale_y_continuous())
+             legend.position = "none")
 
 p1 <- ggplot(d1, aes(x = Vekt, y = Høyde, color = Kjønn)) + geom_point(size = 2)
-p2 <- ggplot(data.table(CJ(paste0("v",1:4), paste0("v", 1:4)), z = runif(16, 0, 5)),
-             aes(x = V1, y = V2, fill = z)) + 
-               geom_tile() + coord_cartesian(expand = F)
-p3 <- ggplot(d, aes(x = Yrke, y = Vekt)) + geom_col(aes(fill = Yrke)) + scale_y_continuous(expand = expansion(mult = c(0,0.05)))
+p2 <- ggplot(data.table(x = rep(1:5, 2), y = c(1,3,6,7,10,8,6,3,2,0), g = rep(c("A", "B"), each = 5)), aes(x = x, y = y, color = g)) + 
+               geom_line(linewidth = 2) + scale_x_continuous(expand = c(0,0))
+p3 <- ggplot(d1, aes(x = Yrke, y = Vekt)) + geom_col(aes(fill = Yrke)) + scale_y_continuous(expand = expansion(mult = c(0,0.05)))
 p4 <- ggplot(unique(data[, .(Kjønn, Yrke, mean, low, high)]), aes(x = Yrke, group = Kjønn, color = Kjønn, y = mean, ymin = low, ymax = high)) + geom_pointrange(linewidth = 2, size = 2, position = position_dodge(width = 0.5))
-p5 <- ggplot(d, aes(x = Yrke, y = Høyde, fill = Kjønn)) + geom_boxplot() + scale_fill_manual(values = c("red", "blue"))
+p5 <- ggplot(d1, aes(x = Yrke, y = Høyde, fill = Kjønn)) + geom_boxplot() + scale_fill_manual(values = c("red", "blue"))
 p6 <- ggplot(data.table(rnorm(10000,0,1)), aes(x = V1)) + geom_density(fill = "blue") + scale_y_continuous(expand = expansion(mult = c(0,0.05)))
 p7 <- ggplot(data, aes(x = Kjønn, y = Vekt)) + geom_violin(aes(fill = Yrke))  + geom_vline(xintercept = c(0.7, 1, 1.3, 1.7, 2, 2.3)) + scale_fill_viridis_d()
-p8 <- ggplot(d, aes(x = 1, fill = Yrke)) + geom_bar(width = 1) + coord_polar("y", start = 0)
+p8 <- ggplot(d1, aes(x = 1, fill = Yrke)) + geom_bar(width = 1) + coord_polar("y", start = 0)
 
 
 demoplot <- p1+p2+p3+p4+p5+p6+p7+p8 + 
@@ -72,6 +73,7 @@ ggsave("./plot/demo.png", demoplot, dpi = 600, width = 33.9, height = 19, units 
 ```
 
 ```{r}
+# Sette default-verdier for resten av plottene
 theme_set(theme_bw())
 theme_update(panel.grid = element_blank(),
              text = element_text(color = "black", size = 24),
@@ -163,91 +165,92 @@ min_ggsave("X1.tekst", x1)
 
 ## 2. Masse farger
 ```{r}
-x2a <- ggplot(data, aes(x = Yrke, y = Vekt, fill = Kjønn)) +
-  geom_boxplot(position = "dodge") + 
-  guides(fill = FALSE) + 
-  scale_fill_manual(values = c("red", "blue"))
+x2a <- ggplot(data, aes(x = Yrke, y = Vekt)) +
+  geom_boxplot() 
 
 
-x2b <- ggplot(data, aes(x = Yrke, y = Vekt, linetype = Kjønn)) +
-                geom_boxplot(position = "dodge", 
-                             fill = c("yellow", "black", "green","red", "blue", "grey20"),
-                             color = c("black", "yellow", "red", "grey20", "green","blue")) + 
+x2b <- ggplot(data, aes(x = Yrke, y = Vekt)) +
+                geom_boxplot(fill = c("green")) + 
   theme(legend.position = "none",
-        panel.background = element_rect(fill = "darkolivegreen"),
+        panel.background = element_rect(fill = "forestgreen"),
         panel.grid.major.y =  element_line(color = "grey40"),
-        panel.border = element_rect(color = "red", linewidth = 3),
+        panel.border = element_rect(color = "darkred", linewidth = 3),
         plot.background = element_rect(fill = "darkolivegreen3"),
-        axis.text = element_text(color = "darkblue"),
-        axis.title = element_text(color = "red2")) 
+        axis.text = element_text(color = "red4"),
+        axis.title = element_text(color = "red")) 
   
 min_ggsave("X2a.boksplott", x2a)
 min_ggsave("X2b.boksplott", x2b)  
 ```
 
-## 3. Reverser y-aksen
+## 3. Minimer luft
 ```{r}
-x3a <- ggplot(data, aes(x = Høyde, y = Vekt)) + 
+d2 <- data[, .(Antall = .N), by = "Yrke"]
+d2[, g := "Antall"]
+
+x3a <- ggplot(d2, aes(x = Yrke, y = Antall, fill = g)) + 
+  geom_col() + 
+  scale_fill_manual(values = c("grey20")) + 
+  guides(fill = FALSE) + 
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
+  labs(title = "Antall yrkesutøvere",
+       x = NULL,
+       y = NULL)
+
+x3b <- x3a  + 
+  scale_y_continuous(breaks = seq(0, 500, by = 50), 
+                     expand = expansion(mult = c(0, 0.05))) +
+  facet_wrap(~Yrke, scales = "free_x") +
+  geom_label(aes(label = Antall), fill = "white", show.legend = F) + 
+  guides(fill = guide_legend(title = NULL)) + 
+  theme(panel.grid.major.y = element_line(linewidth = 2),
+        panel.grid.minor.y = element_line(linetype = 2, linewidth = 1),
+        panel.spacing = unit(0, "cm"),
+        legend.position = "bottom") +
+  labs(subtitle = "Fordelt på menn og kvinner",
+       x = "Yrke",
+       y = "Antall")
+
+min_ggsave("X3a.fyll", x3a)
+min_ggsave("X3b.fyll", x3b)  
+```
+
+## 4. Reverser y-aksen
+```{r}
+x4a <- ggplot(data, aes(x = Høyde, y = Vekt)) + 
   geom_point() + 
   geom_smooth(method = "loess") + 
   coord_cartesian(expand = F) + 
   labs(title = "Sammenhengen mellom vekt og høyde")
 
-x3b <- x3a + 
+x4b <- x4a + 
   scale_y_reverse()
 
-min_ggsave("X3a.reverse", x3a)
-min_ggsave("X3b.reverse", x3b)  
+min_ggsave("X4a.reverse", x4a)
+min_ggsave("X4b.reverse", x4b)  
 ```
 
-## 4. Kutt y-aksen
+## 5. Kutt y-aksen
 ```{r}
-d2 <- data[, .(BMI = mean(BMI)), by = c("Yrke")]
+d3 <- data[, .(BMI = mean(BMI)), by = c("Yrke")]
 
-x4a <- ggplot(d2, aes(x = Yrke, y = BMI)) + 
+x5a <- ggplot(d3, aes(x = Yrke, y = BMI)) + 
   geom_col(fill = "blue") + 
   scale_y_continuous(expand = expansion(mult = c(0,0.05)))
 
-x4b <- x4a + 
+x5b <- x5a + 
   coord_cartesian(ylim = c(23,27.5))
 
-min_ggsave("X4a.kroppY", x4a)
-min_ggsave("X4b.kroppY", x4b)  
-```
-
-
-## 5. Minimer luft
-```{r}
-d3 <- data[, .(Antall = .N), by = c("Yrke", "Kjønn")]
-
-x5a <- ggplot(d3, aes(x = Yrke, y = Antall, fill = Kjønn)) + 
-  geom_col(position = "dodge") + 
-  geom_label(aes(label = Antall, group = Kjønn), 
-             position = position_dodge(width = 0.9),  fill = "white") + 
-  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) + 
-  scale_fill_manual(values = c("red", "blue")) + 
-  labs(title = "Antall yrkesutøvere",
-       x = NULL,
-       y = NULL) + 
-  theme(legend.position = "right")
-
-x5b <- x5a + 
-  scale_y_continuous(breaks = seq(0, 300, by = 20), 
-                     expand = expansion(mult = c(0, 0.05))) +
-  facet_wrap(~Yrke, scales = "free_x") +
-  theme(panel.grid.major.y = element_line(linewidth = 2),
-        panel.grid.minor.y = element_line(linetype = 2, linewidth = 1),
-        panel.spacing = unit(0, "cm")) + 
-  labs(subtitle = "Fordelt på menn og kvinner")
-  
-
-min_ggsave("X5a.fyll", x5a)
-min_ggsave("X5b.fyll", x5b)  
+min_ggsave("X5a.kroppY", x5a)
+min_ggsave("X5b.kroppY", x5b)  
 ```
 
 
 
-## 5. Figurer er alltid nødvendig
+
+
+
+## 6. Figurer er alltid nødvendig
 ```{r}
 data[, HøydeKat := fcase(Høyde > 170, "> 170 cm",
                          Høyde <= 170, "< 170 cm")]
